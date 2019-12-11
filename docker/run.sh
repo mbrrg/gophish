@@ -67,6 +67,13 @@ if [ -n "${DB_FILE_PATH+set}" ] ; then
         cat config.json.tmp > config.json
 fi
 
+if [ -n "${DB_NAME+set}" ] ; then
+    jq -r \
+        --arg DB_NAME "${DB_NAME}" \
+        '.db_name = $DB_NAME' config.json > config.json.tmp && \
+        cat config.json.tmp > config.json
+fi
+
 echo "Runtime configuration: "
 cat config.json
 
