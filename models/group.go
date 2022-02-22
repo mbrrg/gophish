@@ -226,7 +226,6 @@ func PutGroup(g *Group) error {
 		return err
 	}
 	// Fetch group's existing targets from database.
-	ts := []Target{}
 	ts, err := GetTargets(g.Id)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -327,13 +326,10 @@ func insertTargetIntoGroup(tx *gorm.DB, t Target, gid int64) error {
 		}).Error(err)
 		return err
 	}
-	err = tx.Where("group_id=? and target_id=?", gid, t.Id).Find(&GroupTarget{}).Error
-	if err == gorm.ErrRecordNotFound {
-		err = tx.Save(&GroupTarget{GroupId: gid, TargetId: t.Id}).Error
-		if err != nil {
-			log.Error(err)
-			return err
-		}
+	err = tx.Save(&GroupTarget{GroupId: gid, TargetId: t.Id}).Error
+	if err != nil {
+		log.Error(err)
+		return err
 	}
 	if err != nil {
 		log.WithFields(logrus.Fields{

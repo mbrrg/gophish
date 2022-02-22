@@ -10,7 +10,9 @@ const save = (id) => {
     let user = {
         username: $("#username").val(),
         password: $("#password").val(),
-        role: $("#role").val()
+        role: $("#role").val(),
+        password_change_required: $("#force_password_change_checkbox").prop('checked'),
+        account_locked: $("#account_locked_checkbox").prop('checked')
     }
     // Submit the user
     if (id != -1) {
@@ -18,26 +20,26 @@ const save = (id) => {
         // we need to PUT /user/:id
         user.id = id
         api.userId.put(user)
-            .success(function (data) {
+            .success((data) => {
                 successFlash("User " + escapeHtml(user.username) + " updated successfully!")
                 load()
                 dismiss()
                 $("#modal").modal('hide')
             })
-            .error(function (data) {
+            .error((data) => {
                 modalError(data.responseJSON.message)
             })
     } else {
         // Else, if this is a new user, POST it
         // to /user
         api.users.post(user)
-            .success(function (data) {
+            .success((data) => {
                 successFlash("User " + escapeHtml(user.username) + " registered successfully!")
                 load()
                 dismiss()
                 $("#modal").modal('hide')
             })
-            .error(function (data) {
+            .error((data) => {
                 modalError(data.responseJSON.message)
             })
     }
@@ -48,6 +50,8 @@ const dismiss = () => {
     $("#password").val("")
     $("#confirm_password").val("")
     $("#role").val("")
+    $("#force_password_change_checkbox").prop('checked', true)
+    $("#account_locked_checkbox").prop('checked', false)
     $("#modal\\.flashes").empty()
 }
 
@@ -61,10 +65,12 @@ const edit = (id) => {
         $("#role").trigger("change")
     } else {
         api.userId.get(id)
-            .success(function (user) {
+            .success((user) => {
                 $("#username").val(user.username)
                 $("#role").val(user.role.slug)
                 $("#role").trigger("change")
+                $("#force_password_change_checkbox").prop('checked', user.password_change_required)
+                $("#account_locked_checkbox").prop('checked', user.account_locked)
             })
             .error(function () {
                 errorFlash("Error fetching user")
@@ -115,6 +121,55 @@ const deleteUser = (id) => {
     })
 }
 
+const impersonate = (id) => {
+    var user = users.find(x => x.id == id)
+    if (!user) {
+        return
+    }
+    Swal.fire({
+        title: "Are you sure?",
+        html: "You will be logged out of your account and logged in as <strong>" + escapeHtml(user.username) + "</strong>",
+        type: "warning",
+        animation: false,
+        showCancelButton: true,
+        confirmButtonText: "Swap User",
+        confirmButtonColor: "#428bca",
+        reverseButtons: true,
+        allowOutsideClick: false,
+    }).then((result) => {
+        if (result.value) {
+
+         fetch('/impersonate', {
+                method: 'post',
+                body: "username=" + user.username + "&csrf_token=" + encodeURIComponent(csrf_token),
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                  },
+          }).then((response) => {
+                if (response.status == 200) {
+                    Swal.fire({
+                        title: "Success!",
+                        html: "Successfully changed to user <strong>" + escapeHtml(user.username) + "</strong>.",
+                        type: "success",
+                        showCancelButton: false,
+                        confirmButtonText: "Home",
+                        allowOutsideClick: false,
+                    }).then((result) => {
+                        if (result.value) {
+                            window.location.href = "/"
+                        }});
+                } else {
+                    Swal.fire({
+                        title: "Error!",
+                        type: "error",
+                        html: "Failed to change to user <strong>" + escapeHtml(user.username) + "</strong>.",
+                        showCancelButton: false,
+                    })
+                }
+            })
+        }
+      })
+}
 
 const load = () => {
     $("#userTable").hide()
@@ -132,18 +187,29 @@ const load = () => {
                 }]
             });
             userTable.clear();
+            userRows = []
             $.each(users, (i, user) => {
-                userTable.row.add([
+                lastlogin = "Never"
+                if (user.last_login != "0001-01-01T00:00:00Z") {
+                    lastlogin = moment(user.last_login).format('MMMM Do YYYY, h:mm:ss a')
+                }
+                userRows.push([
                     escapeHtml(user.username),
                     escapeHtml(user.role.name),
-                    "<div class='pull-right'><button class='btn btn-primary edit_button' data-toggle='modal' data-backdrop='static' data-target='#modal' data-user-id='" + user.id + "'>\
+                    lastlogin,
+                    "<div class='pull-right'>\
+                    <button class='btn btn-warning impersonate_button' data-user-id='" + user.id + "'>\
+                    <i class='fa fa-retweet'></i>\
+                    </button>\
+                    <button class='btn btn-primary edit_button' data-toggle='modal' data-backdrop='static' data-target='#modal' data-user-id='" + user.id + "'>\
                     <i class='fa fa-pencil'></i>\
                     </button>\
                     <button class='btn btn-danger delete_button' data-user-id='" + user.id + "'>\
                     <i class='fa fa-trash-o'></i>\
                     </button></div>"
-                ]).draw()
+                ])
             })
+            userTable.rows.add(userRows).draw();
         })
         .error(() => {
             errorFlash("Error fetching users")
@@ -179,5 +245,8 @@ $(document).ready(function () {
     })
     $("#userTable").on('click', '.delete_button', function (e) {
         deleteUser($(this).attr('data-user-id'))
+    })
+    $("#userTable").on('click', '.impersonate_button', function (e) {
+        impersonate($(this).attr('data-user-id'))
     })
 });
